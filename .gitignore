@@ -1,0 +1,45 @@
+# --------------------------
+#  Global/OS-Specific Files
+# --------------------------
+.DS_Store
+Thumbs.db
+*.swp
+
+# --------------------------
+#  Python Cache/Compile Files
+# --------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+
+# --------------------------
+#  Virtual Environment
+# --------------------------
+venv/
+env/
+.venv/
+
+
+# --------------------------
+#  Jupyter Notebook Checkpoints
+# --------------------------
+.ipynb_checkpoints/
+
+# --------------------------
+#  W&B (Weights & Biases) logs
+#  Uncomment if you do NOT want
+#  local W&B logs in your repo
+# --------------------------
+wandb/
+wandb_debug.log
+
+# --------------------------
+#  Logs / Other
+# --------------------------
+*.log
+logs/
