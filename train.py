@@ -12,10 +12,10 @@ from utils import set_seed
 set_seed(42)
 
 
-def main():
+def main(is_noisy_nets=False):
     wandb.init(
         project="minatar-dqn",
-        name="DQN-Breakout",
+        name="DQN-Breakout-Noisy" if is_noisy_nets else "DQN-Breakout",
         config={
             "learning_rate": 0.001,
             "batch_size": 8,
@@ -26,6 +26,7 @@ def main():
             "schedule_duration": 15_000,
             "num_episodes": 1000,
             "discount_factor": 0.99,
+            "is_noisy_nets": is_noisy_nets, 
         }
     )
     config = wandb.config
@@ -41,7 +42,8 @@ def main():
         schedule_duration=config.schedule_duration,
         update_freq=config.update_freq,
         maxlen=config.replay_buffer_size,
-        is_double_dqn=True  # double DQN is set to TRUE
+        is_double_dqn=True,  # double DQN is set to TRUE
+        is_noisy_nets=config.is_noisy_nets,
     )
 
     stats = agent.train(config.num_episodes)
@@ -124,4 +126,4 @@ def main():
 #           f"LR={wandb.config.lr}, Batch={wandb.config.batch_size}, eps_end={wandb.config.eps_end}, "
 #           f"AvgReward={avg_reward:.2f}")
 if __name__ == "__main__":
-    main()
+    main(is_noisy_nets=True)
