@@ -1,0 +1,34 @@
+program: train.py
+name: sweep1
+method: random # could be "bayes", "grid", etc.
+metric:
+  name: avg_reward # which metric to optimize
+  goal: maximize
+
+parameters:
+  learning_rate:
+    values: [0.0001, 0.001, 0.01]
+  batch_size:
+    values: [8, 16, 32]
+  eps_end:
+    values: [0.01, 0.05, 0.1]
+  discount_factor:
+    value: 0.99
+  replay_buffer_size:
+    value: 100000
+  update_freq:
+    value: 100
+  eps_start:
+    value: 0.5
+  schedule_duration:
+    value: 15000
+  num_episodes:
+    value: 1000
+  is_double_dqn:
+    value: true
+
+early_terminate:
+  type: hyperband # Aggressively terminate poorly performing runs
+  min_iter: 5 # Minimum episodes before termination
+  eta: 2 # Fraction of runs to discard at each stage
+  s: 2 # Number of brackets for Hyperband
