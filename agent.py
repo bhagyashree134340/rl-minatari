@@ -3,7 +3,6 @@ import torch
 import numpy as np
 import itertools
 from dqn import DQN
-from noisy_wrapper import NoisyDQNWrapper
 from replay_buffer import ReplayBuffer
 from utils import (EpisodeStats,
                    linear_epsilon_decay,
@@ -48,14 +47,8 @@ class DQNAgent:
         self.buffer = ReplayBuffer(maxlen)
 
         # Create Q-networks
-        if self.is_noisy_nets:
-            self.q = NoisyDQNWrapper(env.observation_space.shape, env.action_space.n).to(self.device)
-            self.q_target = NoisyDQNWrapper(env.observation_space.shape, env.action_space.n).to(self.device)
-        else:
-            self.q = DQN(env.observation_space.shape,
-                        env.action_space.n).to(self.device)
-            self.q_target = DQN(env.observation_space.shape,
-                                env.action_space.n).to(self.device)
+        self.q = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets).to(self.device)
+        self.q_target = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets).to(self.device)
 
         self.q_target.load_state_dict(self.q.state_dict())
 

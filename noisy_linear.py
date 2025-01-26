@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from dqn import DQN 
-
 
 class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, std_init=0.4):
@@ -48,15 +46,3 @@ class NoisyLinear(nn.Module):
     def scale_noise(size):
         x = torch.randn(size)
         return x.sign().mul(x.abs().sqrt())
-
-
-class NoisyDQNWrapper(DQN):
-    def __init__(self, obs_shape, num_actions):
-        super(NoisyDQNWrapper, self).__init__(obs_shape, num_actions)
-
-        self.fc1 = NoisyLinear(32 * 4 * 4, 128)
-        self.fc2 = NoisyLinear(128, num_actions)
-
-    def reset_noise(self):
-        for layer in [self.fc1, self.fc2]:
-            layer.reset_noise()
