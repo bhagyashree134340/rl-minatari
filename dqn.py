@@ -8,7 +8,7 @@ set_seed(42)
 
 
 class DQN(nn.Module):
-    def __init__(self, obs_shape, num_actions, is_noisy_nets=False, is_distributional=False, num_atoms=51, v_min=-10, v_max=10):
+    def __init__(self, obs_shape, num_actions, is_noisy_nets=False, is_distributional=False):
         """
         Initialize the DQN network.
 
@@ -24,10 +24,12 @@ class DQN(nn.Module):
 
         self.is_noisy_nets = is_noisy_nets
         self.is_distributional = is_distributional
+
         self.num_actions = num_actions
-        self.num_atoms = num_atoms if is_distributional else 1  # Default to 1 if not distributional
-        self.v_min = v_min
-        self.v_max = v_max
+        self.num_atoms = 21 if is_distributional else 1  # Default to 1 if not distributional
+        self.v_min = 0
+        self.v_max = 10
+        self.support = torch.linspace(self.v_min, self.v_max, self.num_atoms).to("cpu")
 
         # Define the network architecture
         self.conv1 = nn.Conv2d(obs_shape[-1], 16, stride=1, kernel_size=5)
@@ -41,11 +43,8 @@ class DQN(nn.Module):
             self.fc1 = nn.Linear(32 * 4 * 4, 128)
             self.fc2 = nn.Linear(128, num_actions * self.num_atoms)
 
-        # Support for Distributional RL
-        if self.is_distributional:
-            self.register_buffer("support", torch.linspace(v_min, v_max, num_atoms))
-
         self.relu = nn.ReLU()
+        # self.softmax = nn.Softmax()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Switch from (B, H, W, C) to (B, C, H, W)

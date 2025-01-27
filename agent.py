@@ -27,6 +27,7 @@ class DQNAgent:
                  update_freq=100,
                  is_double_dqn=False,
                  is_noisy_nets=False,
+                 is_distributional=False,
                  maxlen=100_000,
                  device="cpu"):
         """
@@ -42,13 +43,14 @@ class DQNAgent:
         self.device = device
         self.is_double_dqn = is_double_dqn
         self.is_noisy_nets = is_noisy_nets
+        self.is_distributional = is_distributional
 
         # Initialize Replay Buffer
         self.buffer = ReplayBuffer(maxlen)
 
         # Create Q-networks
-        self.q = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets).to(self.device)
-        self.q_target = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets).to(self.device)
+        self.q = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets, is_distributional).to(self.device)
+        self.q_target = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets, is_distributional).to(self.device)
 
         self.q_target.load_state_dict(self.q.state_dict())
 
@@ -75,15 +77,25 @@ class DQNAgent:
 
             if self.is_noisy_nets:
                 self.q.reset_noise()
-
+ 
             for episode_time in itertools.count():
                 #if noisy nets then no epsilon-greedy
                 if self.is_noisy_nets:
-                    action = self.q(obs.unsqueeze(0)).argmax(dim=1).item()
+                    if self.is_distributional:
+                        action = self.q(obs.unsqueeze(0)).mean(dim=2).argmax(dim=1).item()
+                    else:
+                        action = self.q(obs.unsqueeze(0)).argmax(dim=1).item()
                 else:
-                    epsilon = linear_epsilon_decay(
-                        self.eps_start, self.eps_end, current_timestep, self.schedule_duration)
-                    action = self.policy(obs.unsqueeze(0), epsilon=epsilon)
+                    epsilon = linear_epsilon_decay(self.eps_start, 
+                    self.eps_end, current_timestep, self.schedule_duration)
+
+                    if self.is_distributional:
+                        # For Distributional RL, use the mean of the distribution to select the action
+                        q_values = self.q(obs.unsqueeze(0)).mean(dim=2)
+                        action = self.policy(obs.unsqueeze(0), epsilon=epsilon, q_values=q_values)
+                    else:
+                        # For regular DQN, use the Q-values directly
+                        action = self.policy(obs.unsqueeze(0), epsilon=epsilon)
 
                 next_obs, reward, terminated, truncated, _ = self.env.step(action)
 
@@ -123,7 +135,8 @@ class DQNAgent:
                         rew_batch,
                         next_obs_batch,
                         tm_batch,
-                        is_double_dqn=self.is_double_dqn
+                        is_double_dqn=self.is_double_dqn,
+                        is_distributional=self.is_distributional
                     )
 
                 # Update target network

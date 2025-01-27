@@ -42,8 +42,9 @@ def main(is_noisy_nets=False):
         schedule_duration=config.schedule_duration,
         update_freq=config.update_freq,
         maxlen=config.replay_buffer_size,
-        is_double_dqn=True,  # double DQN is set to TRUE
+        is_double_dqn=False,  # double DQN is set to TRUE
         is_noisy_nets=config.is_noisy_nets,
+        is_distributional=True,
     )
 
     stats = agent.train(config.num_episodes)
@@ -126,4 +127,4 @@ def main(is_noisy_nets=False):
 #           f"LR={wandb.config.lr}, Batch={wandb.config.batch_size}, eps_end={wandb.config.eps_end}, "
 #           f"AvgReward={avg_reward:.2f}")
 if __name__ == "__main__":
-    main(is_noisy_nets=True)
+    main(is_noisy_nets=False)
