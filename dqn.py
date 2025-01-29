@@ -26,10 +26,10 @@ class DQN(nn.Module):
         self.is_distributional = is_distributional
 
         self.num_actions = num_actions
-        self.num_atoms = 21 if is_distributional else 1  # Default to 1 if not distributional
-        self.v_min = 0
+        self.num_atoms = 51 if is_distributional else 1  # Default to 1 if not distributional
+        self.v_min = -10
         self.v_max = 10
-        self.support = torch.linspace(self.v_min, self.v_max, self.num_atoms).to("cpu")
+        # self.support = torch.linspace(self.v_min, self.v_max, self.num_atoms).to("cpu")
 
         # Define the network architecture
         self.conv1 = nn.Conv2d(obs_shape[-1], 16, stride=1, kernel_size=5)

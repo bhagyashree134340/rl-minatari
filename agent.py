@@ -44,6 +44,9 @@ class DQNAgent:
         self.is_double_dqn = is_double_dqn
         self.is_noisy_nets = is_noisy_nets
         self.is_distributional = is_distributional
+        self.num_atoms = 51
+        self.v_min = -10
+        self.v_max = 10
 
         # Initialize Replay Buffer
         self.buffer = ReplayBuffer(maxlen)
@@ -59,7 +62,7 @@ class DQNAgent:
 
         # Create epsilon-greedy policy function
         if not self.is_noisy_nets:
-            self.policy = make_epsilon_greedy_policy(self.q, env.action_space.n)
+            self.policy = make_epsilon_greedy_policy(self.q, env.action_space.n, self.is_distributional, self.num_atoms, self.v_min, self.v_max)
 
     def train(self, num_episodes: int = 1000):
         """
@@ -81,21 +84,11 @@ class DQNAgent:
             for episode_time in itertools.count():
                 #if noisy nets then no epsilon-greedy
                 if self.is_noisy_nets:
-                    if self.is_distributional:
-                        action = self.q(obs.unsqueeze(0)).mean(dim=2).argmax(dim=1).item()
-                    else:
-                        action = self.q(obs.unsqueeze(0)).argmax(dim=1).item()
+                    action = self.q(obs.unsqueeze(0)).argmax(dim=1).item()
                 else:
-                    epsilon = linear_epsilon_decay(self.eps_start, 
-                    self.eps_end, current_timestep, self.schedule_duration)
-
-                    if self.is_distributional:
-                        # For Distributional RL, use the mean of the distribution to select the action
-                        q_values = self.q(obs.unsqueeze(0)).mean(dim=2)
-                        action = self.policy(obs.unsqueeze(0), epsilon=epsilon, q_values=q_values)
-                    else:
-                        # For regular DQN, use the Q-values directly
-                        action = self.policy(obs.unsqueeze(0), epsilon=epsilon)
+                    epsilon = linear_epsilon_decay(
+                        self.eps_start, self.eps_end, current_timestep, self.schedule_duration)
+                    action = self.policy(obs.unsqueeze(0), epsilon=epsilon)
 
                 next_obs, reward, terminated, truncated, _ = self.env.step(action)
 

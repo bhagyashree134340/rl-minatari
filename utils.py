@@ -16,20 +16,26 @@ def linear_epsilon_decay(eps_start: float, eps_end: float, current_timestep: int
     return (eps_start - eps_end) * (1 - ratio) + eps_end
 
 
-def make_epsilon_greedy_policy(Q, num_actions: int):
+def make_epsilon_greedy_policy(Q, num_actions: int, is_distributional:bool, num_atoms:int, v_min:int, v_max:int):
     """
     Creates an epsilon-greedy policy given a Q-network and number of actions.
     """
-    def policy_fn(obs: torch.Tensor, epsilon: float = 0.0, q_values: torch.Tensor = None):
-        if q_values is None:
-            q_values = Q(obs)
-        else:
-            q_values = q_values
-
+    def policy_fn(obs: torch.Tensor, epsilon: float = 0.0):
         if np.random.uniform() < epsilon:
             return np.random.randint(0, num_actions)
-        return q_values.argmax(dim=1).detach().numpy()[0]  # expects batch size 1
+        with torch.no_grad():
+            q_values = Q(obs)  # Shape: (batch_size, num_actions, num_atoms) if distributional
+
+            if is_distributional:
+                # Compute expected Q-values for each action
+                support = torch.linspace(v_min, v_max, num_atoms, device=obs.device)
+                expected_q_values = (q_values * support).sum(dim=-1) 
+                action = expected_q_values.argmax(dim=1).item() 
+            else:
+                action = q_values.argmax(dim=1).item() 
+        return action 
     return policy_fn
+
 
 
 def update_dqn(q, q_target, optimizer, gamma,
@@ -41,14 +47,22 @@ def update_dqn(q, q_target, optimizer, gamma,
 
     if is_distributional:
         with torch.no_grad():
-            # Compute target distribution
-            next_probs = q_target(next_obs)  # (B, A, num_atoms)
-            next_actions = next_probs.mean(dim=2).argmax(dim=1)  # (B,)
-            next_probs = next_probs[torch.arange(next_probs.size(0)), next_actions]  # (B, num_atoms)
+            # # Compute target distribution
+            # next_probs = q_target(next_obs)  # (B, A, num_atoms)
+            # next_actions = next_probs.mean(dim=2).argmax(dim=1)  # (B,)
+            # next_probs = next_probs[torch.arange(next_probs.size(0)), next_actions]  # (B, num_atoms)
 
-            # Project target distribution onto support
+            # # Project target distribution onto support
             delta_z = (q.v_max - q.v_min) / (q.num_atoms - 1)
-            target_support = rew.unsqueeze(1) + gamma * q.support * (1 - tm.float()).unsqueeze(1)
+            support = torch.linspace(q.v_min, q.v_max, q.num_atoms, device=obs.device)
+            # target_support = rew.unsqueeze(1) + gamma * q.support * (1 - tm.float()).unsqueeze(1)
+            # target_support = torch.clamp(target_support, q.v_min, q.v_max)
+
+            next_dist = q_target(next_obs)
+            next_actions = next_dist.mean(2).argmax(1)
+            next_dist = next_dist[range(len(next_actions)), next_actions]
+
+            target_support = rew.unsqueeze(1) + gamma * support.unsqueeze(0) * (1 - tm.float()).unsqueeze(1)
             target_support = torch.clamp(target_support, q.v_min, q.v_max)
 
             # Compute projection of target_support onto support
@@ -56,17 +70,19 @@ def update_dqn(q, q_target, optimizer, gamma,
             l = b.floor().long()
             u = b.ceil().long()
 
-            # Distribute probabilities
-            proj_probs = torch.zeros_like(next_probs)
-            proj_probs.scatter_add_(1, l, next_probs * (u.float() - b))
-            proj_probs.scatter_add_(1, u, next_probs * (b - l.float()))
+            offset = torch.linspace(0, (len(rew) - 1) * q.num_atoms, len(rew)).long().unsqueeze(1).expand(len(rew), q.num_atoms).to(obs.device)
+            
+            proj_dist = torch.zeros_like(next_dist)
+            proj_dist.view(-1).index_add_(0, (l + offset).view(-1), (next_dist * (u.float() - b)).view(-1))
+            proj_dist.view(-1).index_add_(0, (u + offset).view(-1), (next_dist * (b - l.float())).view(-1))
 
-        # Compute predicted distribution
-        logits = q(obs)  # (B, A, num_atoms)
-        logits = logits[torch.arange(logits.size(0)), act]  # (B, num_atoms)
+         # Compute the current distribution
+        current_dist = q(obs)
+        actions = act.unsqueeze(1).expand(len(act), q.num_atoms)
+        current_dist = current_dist.gather(1, actions.unsqueeze(1)).squeeze(1)
 
-        # Compute cross-entropy loss
-        loss = -(proj_probs * logits.log_softmax(dim=1)).sum(dim=1).mean()
+        # Compute the cross-entropy loss
+        loss = -(proj_dist * torch.log(current_dist + 1e-8)).sum(1).mean()
     else:
         # TD Target or double dqn
         with torch.no_grad():
