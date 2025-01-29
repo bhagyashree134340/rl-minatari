@@ -47,16 +47,8 @@ def update_dqn(q, q_target, optimizer, gamma,
 
     if is_distributional:
         with torch.no_grad():
-            # # Compute target distribution
-            # next_probs = q_target(next_obs)  # (B, A, num_atoms)
-            # next_actions = next_probs.mean(dim=2).argmax(dim=1)  # (B,)
-            # next_probs = next_probs[torch.arange(next_probs.size(0)), next_actions]  # (B, num_atoms)
-
-            # # Project target distribution onto support
             delta_z = (q.v_max - q.v_min) / (q.num_atoms - 1)
             support = torch.linspace(q.v_min, q.v_max, q.num_atoms, device=obs.device)
-            # target_support = rew.unsqueeze(1) + gamma * q.support * (1 - tm.float()).unsqueeze(1)
-            # target_support = torch.clamp(target_support, q.v_min, q.v_max)
 
             next_dist = q_target(next_obs)
             next_actions = next_dist.mean(2).argmax(1)
