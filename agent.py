@@ -99,6 +99,10 @@ class DQNAgent:
                             #FIXME: pmf doesnt reach update
                             actions, pmf = self.q.get_action(torch.as_tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0))
                             actions = actions.cpu().item()
+                    else:
+                        epsilon = linear_epsilon_decay(
+                        self.eps_start, self.eps_end, current_timestep, self.schedule_duration)
+                        action = self.policy(obs.unsqueeze(0), epsilon=epsilon)
 
                 next_obs, reward, terminated, truncated, _ = self.env.step(action)
 
