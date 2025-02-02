@@ -28,6 +28,7 @@ class DQN(nn.Module):
         self.num_atoms = num_atoms if is_distributional else 1  # Default to 1 if not distributional
         self.v_min = v_min
         self.v_max = v_max
+        # self.register_buffer("atoms", torch.linspace(v_min, v_max, steps=num_atoms))
 
         # Define the network architecture
         self.conv1 = nn.Conv2d(obs_shape[-1], 16, stride=1, kernel_size=5)
@@ -57,14 +58,24 @@ class DQN(nn.Module):
         x = self.relu(self.fc1(x))
         x = self.fc2(x)
         
-        if self.is_distributional:
-            x = x.view(-1, self.num_actions, self.num_atoms)
-            return F.softmax(x, dim=-1)  # Return probabilities over atoms
-        else:
-            # Standard Q-values
-            return x
+        # if self.is_distributional:
+        #     x = x.view(-1, self.num_actions, self.num_atoms)
+        #     return F.softmax(x, dim=-1)  # Return probabilities over atoms
+        # else:
+        #     # Standard Q-values
+        #     return x
+        return x
 
     def reset_noise(self):
         if self.is_noisy_nets:
             for layer in [self.fc1, self.fc2]:
                 layer.reset_noise()
+
+    def get_action(self, x, action=None):
+        logits = self.forward(x / 255.0)
+        # probability mass function for each action
+        pmfs = torch.softmax(logits.view(len(x), self.num_actions, self.num_atoms), dim=2)
+        q_values = (pmfs * self.support).sum(2)
+        if action is None:
+            action = torch.argmax(q_values, 1)
+        return action, pmfs[torch.arange(len(x)), action]

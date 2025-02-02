@@ -27,6 +27,10 @@ class DQNAgent:
                  update_freq=100,
                  is_double_dqn=False,
                  is_noisy_nets=False,
+                 is_distributional=False,
+                 num_atoms=51, 
+                 v_min=-10, 
+                 v_max=10,
                  maxlen=100_000,
                  device="cpu"):
         """
@@ -42,13 +46,17 @@ class DQNAgent:
         self.device = device
         self.is_double_dqn = is_double_dqn
         self.is_noisy_nets = is_noisy_nets
+        self.is_distributional = is_distributional
+        self.num_atoms = num_atoms
+        self.v_min = v_min
+        self.v_max = v_max
 
         # Initialize Replay Buffer
         self.buffer = ReplayBuffer(maxlen)
 
         # Create Q-networks
-        self.q = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets).to(self.device)
-        self.q_target = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets).to(self.device)
+        self.q = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets, is_distributional, num_atoms, v_min, v_max).to(self.device)
+        self.q_target = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets, is_distributional, num_atoms, v_min, v_max).to(self.device)
 
         self.q_target.load_state_dict(self.q.state_dict())
 
@@ -83,7 +91,14 @@ class DQNAgent:
                 else:
                     epsilon = linear_epsilon_decay(
                         self.eps_start, self.eps_end, current_timestep, self.schedule_duration)
-                    action = self.policy(obs.unsqueeze(0), epsilon=epsilon)
+
+                    if self.is_distributional:
+                        if np.random.uniform() < epsilon:
+                            action = np.random.randint(0, self.env.action_space.n)
+                        else:
+                            #FIXME: pmf doesnt reach update
+                            actions, pmf = self.q.get_action(torch.as_tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0))
+                            actions = actions.cpu().item()
 
                 next_obs, reward, terminated, truncated, _ = self.env.step(action)
 
@@ -123,7 +138,11 @@ class DQNAgent:
                         rew_batch,
                         next_obs_batch,
                         tm_batch,
-                        is_double_dqn=self.is_double_dqn
+                        self.is_double_dqn,
+                        self.is_distributional, 
+                        self.num_atoms, 
+                        self.v_min, 
+                        self.v_max
                     )
 
                 # Update target network
