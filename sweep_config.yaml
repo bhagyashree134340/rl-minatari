@@ -1,15 +1,15 @@
 program: train.py
 name: sweep1
-method: random # could be "bayes", "grid", etc.
+method: random  # Options: "bayes", "grid", etc.
 metric:
-  name: avg_reward # which metric to optimize
+  name: avg_reward  # Metric to optimize
   goal: maximize
 
 parameters:
   learning_rate:
-    values: [0.0001, 0.001, 0.01]
+    values: [0.0001, 0.001, 0.005, 0.01]
   batch_size:
-    values: [8, 16, 32]
+    values: [8, 16, 32, 64]
   eps_end:
     values: [0.01, 0.05, 0.1]
   discount_factor:
@@ -25,10 +25,18 @@ parameters:
   num_episodes:
     value: 1000
   is_double_dqn:
-    value: true
+    values: [ false ]  # Toggle Double Q-Learning
+  is_noisy_nets:
+    values: [ false ]  # Toggle Noisy Nets
+  is_dual_dqn:
+    values: [ true ]  # Toggle Dual Networks
+  is_multi_step:
+    values: [ false ]   # Toggle Multi-Step Learning
+  n_step:
+    values: [1, 3, 5]  # Number of steps for Multi-Step Learning
 
 early_terminate:
-  type: hyperband # Aggressively terminate poorly performing runs
-  min_iter: 5 # Minimum episodes before termination
-  eta: 2 # Fraction of runs to discard at each stage
-  s: 2 # Number of brackets for Hyperband
+  type: hyperband  # Aggressively terminate poorly performing runs
+  min_iter: 5  # Minimum episodes before termination
+  eta: 2  # Fraction of runs to discard at each stage
+  s: 2  # Number of brackets for Hyperband

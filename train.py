@@ -1,21 +1,51 @@
+
+
 import wandb
 import gymnasium as gym
 import numpy as np
 import torch
 from agent import DQNAgent
 import matplotlib.pyplot as plt
-from utils import make_epsilon_greedy_policy
 import pandas as pd
-from IPython.display import Image as IImage
 import yaml
 from utils import set_seed
+from minatar import Environment
+
+# ✅ Set seed for reproducibility
 set_seed(42)
+
+# ✅ Custom MinAtar Wrapper
+class MinAtarGymWrapper(gym.Env):
+    """Custom Gym Wrapper for MinAtar environments."""
+
+    def __init__(self, game="breakout"):
+        super().__init__()
+        self.env = Environment(game)
+        
+        # ✅ Properly set action & observation spaces
+        self.action_space = gym.spaces.Discrete(self.env.num_actions())  
+        obs_shape = self.env.state().shape  
+        self.observation_space = gym.spaces.Box(low=0, high=1, shape=obs_shape, dtype=np.float32)
+
+    def reset(self, seed=None, options=None):
+        self.env.reset()
+        return self.env.state(), {}  
+
+    def step(self, action):
+        reward, done = self.env.act(action)  
+        return self.env.state(), reward, done, False, {}  
+
+    def render(self, mode="rgb_array"):
+        return self.env.state()  
+
+    def close(self):
+        pass
 
 
 def main():
     wandb.init(
         project="minatar-dqn",
-        name="DQN-Breakout",
+        name="DQN-MinAtar",
         config={
             "learning_rate": 0.001,
             "batch_size": 8,
@@ -26,11 +56,21 @@ def main():
             "schedule_duration": 15_000,
             "num_episodes": 1000,
             "discount_factor": 0.99,
+            "is_double_dqn": False,  
+            "is_noisy_nets": False,  
+            "is_dueling_dqn": True,  # ✅ Fixed: Changed from `is_dual_dqn`
+            "is_multi_step": False,  
+            "multi_step_n": 3,  
         }
     )
     config = wandb.config
 
-    env = gym.make('MinAtar/Breakout-v1', render_mode="rgb_array")
+    # ✅ Use our MinAtar wrapper
+    env = MinAtarGymWrapper("breakout")
+    print(f"✅ Successfully created MinAtar Environment: {env}")
+    obs, _ = env.reset()
+    print(f"DEBUG: Initial Observation Shape: {obs.shape}")  
+
     agent = DQNAgent(
         env,
         gamma=config.discount_factor,
@@ -41,87 +81,44 @@ def main():
         schedule_duration=config.schedule_duration,
         update_freq=config.update_freq,
         maxlen=config.replay_buffer_size,
-        is_double_dqn=True  # double DQN is set to TRUE
+        is_double_dqn=config.is_double_dqn,
+        is_noisy_nets=config.is_noisy_nets,
+        is_dueling_dqn=config.is_dueling_dqn,  # ✅ Fixed: Changed from `is_dual_dqn`
+        is_multi_step=config.is_multi_step,
+        multi_step_n=config.multi_step_n if config.is_multi_step else 1,  
     )
 
     stats = agent.train(config.num_episodes)
 
-    # Log final results, e.g. average reward of last 50 episodes
+    # ✅ Log final results
     avg_reward = np.mean(stats.episode_rewards[-50:])
     wandb.log({"final_average_reward": avg_reward})
-    print(f"Final Average Reward (last 50 episodes): {avg_reward}")
+    print(f"✅ Final Average Reward (last 50 episodes): {avg_reward}")
 
     def plot_and_log(stats, smoothing_window=10):
-        # Create a figure with two subplots
         fig, axes = plt.subplots(1, 2, figsize=(10, 5), tight_layout=True)
 
-        # 1) Episode Lengths
+        # ✅ Episode Lengths
         ax = axes[0]
         ax.plot(stats.episode_lengths)
         ax.set_xlabel("Episode")
         ax.set_ylabel("Episode Length")
         ax.set_title("Episode Length over Time")
 
-        # 2) Smoothed Episode Rewards
+        # ✅ Smoothed Episode Rewards
         ax = axes[1]
-        rewards_smoothed = pd.Series(stats.episode_rewards).rolling(
-            smoothing_window, min_periods=smoothing_window
-        ).mean()
+        rewards_smoothed = pd.Series(stats.episode_rewards).rolling(smoothing_window, min_periods=smoothing_window).mean()
         ax.plot(rewards_smoothed)
         ax.set_xlabel("Episode")
         ax.set_ylabel("Episode Reward (Smoothed)")
-        ax.set_title(
-            f"Episode Reward over Time\n(Smoothed over window size {smoothing_window})"
-        )
+        ax.set_title(f"Episode Reward over Time\n(Smoothed over window size {smoothing_window})")
 
-        # Log this figure to W&B
+        # ✅ Log to W&B
         wandb.log({"training_plots": wandb.Image(fig)})
-
-        # Close the figure (to avoid memory issues in notebook or repeated logging)
         plt.close(fig)
 
     plot_and_log(stats=stats, smoothing_window=20)
 
 
-# def main():
-
-#     with open("./sweep_config.yaml") as file:
-#         config = yaml.load(file, Loader=yaml.FullLoader)
-#     # 1. Initialize W&B run
-#     print(config)
-#     wandb.init(project="my-minatar-project", config=config)
-
-#     # 2. Set seeds
-#     set_seed(42)
-
-#     # 3. Create environment
-#     env = gym.make('MinAtar/Breakout-v1', render_mode="rgb_array")
-
-#     # 4. Create agent
-#     agent = DQNAgent(
-#         env=env,
-#         gamma=0.99,
-#         lr=wandb.config.lr,                  # from sweep
-#         batch_size=wandb.config.batch_size,  # from sweep
-#         eps_start=0.5,
-#         eps_end=wandb.config.eps_end,        # from sweep
-#         schedule_duration=15_000,
-#         update_freq=100,
-#         maxlen=100_000,
-#         # is_double_dqn=wandb.config.is_double_dqn,  # toggle Double vs. Vanilla
-#         device="cpu"
-#     )
-
-#     # 5. Train
-#     num_episodes = wandb.config.episode
-#     stats = agent.train(num_episodes)
-
-#     # 6. Compute some metric to report back to W&B
-#     avg_reward = np.mean(stats.episode_rewards[-50:])  # last 50 episodes
-#     wandb.log({"avg_reward": avg_reward})
-
-#     print(f"Finished run:, "
-#           f"LR={wandb.config.lr}, Batch={wandb.config.batch_size}, eps_end={wandb.config.eps_end}, "
-#           f"AvgReward={avg_reward:.2f}")
 if __name__ == "__main__":
     main()
