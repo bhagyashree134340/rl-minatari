@@ -5,6 +5,7 @@ from agent import DQNAgent
 import matplotlib.pyplot as plt
 from utils import animate
 import pandas as pd
+from utils import animate, set_seed
 from utils import set_seed
 set_seed(42)
 
@@ -23,9 +24,15 @@ def main():
             "schedule_duration": 15_000,
             "num_episodes": 1000,
             "discount_factor": 0.99,
+            "is_double_dqn": True,
+            "use_prioritized_replay": True,  # Toggle this to see difference 
             "is_noisy_nets": True, 
-            "std_init":0.5
+            "std_init":0.5,
+            "is_distributional":False,
+            "num_atoms":51,
         }
+            
+        
     )
     config = wandb.config
 

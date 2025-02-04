@@ -33,6 +33,10 @@ class DQNAgent:
                  v_min=-10, 
                  v_max=10,
                  maxlen=100_000,
+                 use_prioritized_replay=False,
+                 alpha=0.6,
+                 beta_start=0.4,
+                 beta_frames=200_000,
                  device="cpu"):
         """
         Initialize the DQN agent.
