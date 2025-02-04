@@ -28,6 +28,12 @@ class DQNAgent:
                  eps_end=0.1,
                  schedule_duration=10_000,
                  update_freq=100,
+                 is_double_dqn=False,
+                 is_noisy_nets=False,
+                 is_distributional=False,
+                 num_atoms=51, 
+                 v_min=-10, 
+                 v_max=10,
                  maxlen=100_000,
                  is_double_dqn=False,
                  use_prioritized_replay=False,
@@ -47,6 +53,11 @@ class DQNAgent:
         self.update_freq = update_freq
         self.device = device
         self.is_double_dqn = is_double_dqn
+        self.is_noisy_nets = is_noisy_nets
+        self.is_distributional = is_distributional
+        self.num_atoms = num_atoms
+        self.v_min = v_min
+        self.v_max = v_max
 
         # For Prioritized Replay
         self.use_prioritized_replay = use_prioritized_replay
@@ -67,17 +78,17 @@ class DQNAgent:
             self.buffer = ReplayBuffer(max_size=maxlen)
 
         # Create Q-networks
-        self.q = DQN(env.observation_space.shape,
-                     env.action_space.n).to(self.device)
-        self.q_target = DQN(env.observation_space.shape,
-                            env.action_space.n).to(self.device)
+        self.q = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets, is_distributional, num_atoms, v_min, v_max).to(self.device)
+        self.q_target = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets, is_distributional, num_atoms, v_min, v_max).to(self.device)
+
         self.q_target.load_state_dict(self.q.state_dict())
 
         # Create optimizer
         self.optimizer = optim.Adam(self.q.parameters(), lr=lr)
 
         # Create epsilon-greedy policy function
-        self.policy = make_epsilon_greedy_policy(self.q, env.action_space.n)
+        if not self.is_noisy_nets:
+            self.policy = make_epsilon_greedy_policy(self.q, env.action_space.n)
 
     def _beta_by_frame(self, frame):
         """
@@ -96,17 +107,29 @@ class DQNAgent:
             obs, _ = self.env.reset()
             obs = torch.as_tensor(obs, dtype=torch.float32, device=self.device)
 
+            if self.is_noisy_nets:
+                self.q.reset_noise()
+
             for episode_time in itertools.count():
-                # Update epsilon
-                epsilon = linear_epsilon_decay(
-                    self.eps_start, self.eps_end, current_timestep, self.schedule_duration
-                )
+                #if noisy nets then no epsilon-greedy
+                if self.is_noisy_nets:
+                    action = self.q(obs.unsqueeze(0)).argmax(dim=1).item()
+                else:
+                    epsilon = linear_epsilon_decay(
+                        self.eps_start, self.eps_end, current_timestep, self.schedule_duration)
 
-                # Choose action (epsilon-greedy)
-                action = self.policy(obs.unsqueeze(0), epsilon=epsilon)
+                    if self.is_distributional:
+                        if np.random.uniform() < epsilon:
+                            action = np.random.randint(0, self.env.action_space.n)
+                        else:
+                            #FIXME: pmf doesnt reach update
+                            action, pmf = self.q.get_action(obs.unsqueeze(0))
+                            action = action.item()
+                    else:
+                        action = self.policy(obs.unsqueeze(0), epsilon=epsilon)
 
-                next_obs, reward, terminated, truncated, _ = self.env.step(
-                    action)
+                # print(action)
+                next_obs, reward, terminated, truncated, _ = self.env.step(action)
 
                 stats.episode_rewards[i_episode] += reward
                 stats.episode_lengths[i_episode] += 1
@@ -203,7 +226,7 @@ class DQNAgent:
                             done_b,
                             is_double_dqn=self.is_double_dqn
                         )
-
+                        
                 # Update target network
                 if current_timestep % self.update_freq == 0:
                     self.q_target.load_state_dict(self.q.state_dict())
@@ -212,18 +235,32 @@ class DQNAgent:
                 if terminated or truncated or (episode_time >= 500):
                     break
 
-            # Logging
-            if (i_episode + 1) % 100 == 0:
-                print(f"Episode {i_episode+1}/{num_episodes} "
-                      f"Time Step: {current_timestep} "
-                      f"Epsilon: {epsilon:.3f} "
-                      f"Reward: {stats.episode_rewards[i_episode]:.2f}")
+                obs = next_obs
 
-            wandb.log({
-                "episode": i_episode,
-                "epsilon": epsilon,
-                "episode_reward": stats.episode_rewards[i_episode],
-                "episode_length": stats.episode_lengths[i_episode],
-            })
+            # Print progress
+            if self.is_noisy_nets:
+                if (i_episode + 1) % 100 == 0:
+                    print(f"Episode {i_episode+1}/{num_episodes} "
+                        f"Time Step: {current_timestep} "
+                        f"Reward: {stats.episode_rewards[i_episode]:.2f}")
 
+                wandb.log({
+                    "episode": i_episode,
+                    "episode_reward": stats.episode_rewards[i_episode],
+                    "episode_length": stats.episode_lengths[i_episode],
+                })
+            else:
+                if (i_episode + 1) % 100 == 0:
+                    print(f"Episode {i_episode+1}/{num_episodes} "
+                        f"Time Step: {current_timestep} "
+                        f"Epsilon: {epsilon:.3f} "
+                        f"Reward: {stats.episode_rewards[i_episode]:.2f}")
+
+                wandb.log({
+                    "episode": i_episode,
+                    "epsilon": epsilon,
+                    "episode_reward": stats.episode_rewards[i_episode],
+                    "episode_length": stats.episode_lengths[i_episode],
+                })
+                
         return stats

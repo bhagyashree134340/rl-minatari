@@ -7,12 +7,13 @@ from agent import DQNAgent
 import matplotlib.pyplot as plt
 import pandas as pd
 from utils import make_epsilon_greedy_policy, set_seed
+from utils import set_seed
+set_seed(42)
 
-
-def main():
+def main(is_noisy_nets=False):
     wandb.init(
         project="minatar-dqn",
-        name="DQN-Breakout",
+        name="DQN-Breakout-Noisy" if is_noisy_nets else "DQN-Breakout",
         config={
             "learning_rate": 0.001,
             "batch_size": 8,
@@ -25,6 +26,7 @@ def main():
             "discount_factor": 0.99,
             "is_double_dqn": True,
             "use_prioritized_replay": True,  # Toggle this to see difference
+            "is_noisy_nets": is_noisy_nets, 
         }
     )
     config = wandb.config
@@ -44,6 +46,11 @@ def main():
         maxlen=config.replay_buffer_size,
         is_double_dqn=config.is_double_dqn,
         use_prioritized_replay=config.use_prioritized_replay,
+        is_noisy_nets=config.is_noisy_nets,
+        is_distributional=False,
+        num_atoms=3, 
+        v_min=1, 
+        v_max=10,
         device="cpu"
     )
 
@@ -79,8 +86,8 @@ def main():
         wandb.log({"training_plots": wandb.Image(fig)})
         plt.close(fig)
 
-    plot_and_log(stats, smoothing_window=20)
-
+    plot_and_log(stats=stats, smoothing_window=20)
+    animate(env, agent, agent.is_noisy_nets, agent.is_distributional, agent.is_double_dqn)
 
 if __name__ == "__main__":
-    main()
+    main(is_noisy_nets=True)
