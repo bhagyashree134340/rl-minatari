@@ -4,6 +4,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from collections import namedtuple
+import torch
+import numpy as np
+from PIL import Image
 
 EpisodeStats = namedtuple("Stats", ["episode_lengths", "episode_rewards"])
 
@@ -36,6 +39,10 @@ def update_dqn(q, q_target, optimizer, gamma,
 
     if is_distributional:
         with torch.no_grad():
+            # print("obs_batch shape:", obs.shape)
+            # print("obs_batch:", obs)  # Or obs_batch[:5] to see a few
+            # print("next_obs shape:", next_obs.shape)
+            # print("next_obs:", next_obs)  # Or next_obs[:5]
             _, next_pmfs = q_target.get_action(next_obs)
             next_atoms = rew[:, None] + gamma * q_target.support[None, :] * (1 - tm[:, None].float())
             # projection
@@ -93,3 +100,48 @@ def set_seed(seed: int = 42):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+def save_rgb_animation(rgb_arrays, filename, duration=100):
+    """Save an animated GIF from a list of RGB arrays."""
+    frames = []
+    for rgb_array in rgb_arrays:
+        rgb_array = (rgb_array * 255).astype(np.uint8)
+        rgb_array = rgb_array.repeat(48, axis=0).repeat(48, axis=1)
+        img = Image.fromarray(rgb_array)
+        frames.append(img)
+    frames[0].save(filename, save_all=True, append_images=frames[1:], duration=duration, loop=0)
+
+def rendered_rollout(policy_fn, env, is_distributional, max_steps=10_000):
+    """Rollout for one episode while saving all rendered images."""
+    obs, _ = env.reset()
+    imgs = [env.render()]
+
+    for i in range(max_steps):
+        if is_distributional:
+            action, _ = policy_fn(torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0))
+        else:
+            action = policy_fn(torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)).item()
+        print(f"Step {i}: Action={action}, Valid Actions={list(range(env.action_space.n))}")
+        obs, reward, terminated, truncated, _ = env.step(action)
+        imgs.append(env.render())
+        print(f"Step {i}: Action={action}, Reward={reward}, Terminated={terminated}, Truncated={truncated}")
+        if terminated or truncated:
+            break
+    print(f"Number of frames collected: {len(imgs)}")
+    return imgs
+
+def animate(env, agent, is_noisy_nets, is_distributional, is_double_dqn, filename="trained.gif", max_steps=10_000):
+    """Generates an animation of the agent interacting with the environment."""
+    filename = "trained_noisy_nets.gif" if is_noisy_nets else "trained_distributional.gif" if is_distributional else "trained_double_dqn.gif" if is_double_dqn else "trained.gif"
+    def noisy_policy(obs: torch.Tensor):
+        return agent.q(obs).argmax(dim=1).detach().numpy()[0]
+    
+    imgs = rendered_rollout(
+        noisy_policy if is_noisy_nets 
+        else agent.q.get_action if is_distributional 
+        else make_epsilon_greedy_policy(agent.q, num_actions=env.action_space.n),
+        env, is_distributional, max_steps
+    )    
+    save_rgb_animation(imgs, filename)
+    print(f"Animation saved as {filename}")
+
