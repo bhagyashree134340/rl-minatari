@@ -29,7 +29,7 @@ parameters:
   is_noisy_nets:
     values: [True, False]
   is_distributional:
-    values: False
+    value: False
   std_init:
     values: [0.1, 0.2, 0.3, 0.4, 0.5]
   num_atoms:
