@@ -3,10 +3,11 @@
 import wandb
 import gymnasium as gym
 import numpy as np
-import torch
 from agent import DQNAgent
 import matplotlib.pyplot as plt
+from utils import animate
 import pandas as pd
+from utils import animate, set_seed
 import yaml
 from utils import set_seed
 from minatar import Environment
@@ -56,12 +57,16 @@ def main():
             "schedule_duration": 15_000,
             "num_episodes": 1000,
             "discount_factor": 0.99,
-            "is_double_dqn": False,  
-            "is_noisy_nets": False,  
+            "is_double_dqn": True,
+            "use_prioritized_replay": True,  # Toggle this to see difference 
+            "is_noisy_nets": True, 
+            "std_init":0.5,
+            "is_distributional":False,
+            "num_atoms":51,
             "is_dueling_dqn": True,  # ✅ Fixed: Changed from `is_dual_dqn`
             "is_multi_step": False,  
             "multi_step_n": 3,  
-        }
+        }                   
     )
     config = wandb.config
 
@@ -81,11 +86,16 @@ def main():
         schedule_duration=config.schedule_duration,
         update_freq=config.update_freq,
         maxlen=config.replay_buffer_size,
-        is_double_dqn=config.is_double_dqn,
+        is_double_dqn=config.is_double_dqn,  # double DQN is set to TRUE
         is_noisy_nets=config.is_noisy_nets,
+        std_init=config.std_init,
+        is_distributional=config.is_distributional,
+        num_atoms=config.num_atoms, 
+        v_min=-10, 
+        v_max=10,
         is_dueling_dqn=config.is_dueling_dqn,  # ✅ Fixed: Changed from `is_dual_dqn`
         is_multi_step=config.is_multi_step,
-        multi_step_n=config.multi_step_n if config.is_multi_step else 1,  
+        multi_step_n=config.multi_step_n if config.is_multi_step else 1,
     )
 
     stats = agent.train(config.num_episodes)
@@ -118,7 +128,7 @@ def main():
         plt.close(fig)
 
     plot_and_log(stats=stats, smoothing_window=20)
-
+    animate(env, agent, agent.is_noisy_nets, agent.is_distributional, agent.is_double_dqn)
 
 if __name__ == "__main__":
     main()
