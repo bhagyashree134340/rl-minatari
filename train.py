@@ -1,21 +1,18 @@
 import wandb
 import gymnasium as gym
 import numpy as np
-import torch
 from agent import DQNAgent
 import matplotlib.pyplot as plt
-from utils import make_epsilon_greedy_policy
+from utils import animate
 import pandas as pd
-from IPython.display import Image as IImage
-import yaml
 from utils import set_seed
 set_seed(42)
 
 
-def main():
+def main(is_noisy_nets=False):
     wandb.init(
         project="minatar-dqn",
-        name="DQN-Breakout",
+        name="DQN-Breakout-Noisy" if is_noisy_nets else "DQN-Breakout",
         config={
             "learning_rate": 0.001,
             "batch_size": 8,
@@ -26,6 +23,7 @@ def main():
             "schedule_duration": 15_000,
             "num_episodes": 1000,
             "discount_factor": 0.99,
+            "is_noisy_nets": is_noisy_nets, 
         }
     )
     config = wandb.config
@@ -41,7 +39,12 @@ def main():
         schedule_duration=config.schedule_duration,
         update_freq=config.update_freq,
         maxlen=config.replay_buffer_size,
-        is_double_dqn=True  # double DQN is set to TRUE
+        is_double_dqn=False,  # double DQN is set to TRUE
+        is_noisy_nets=config.is_noisy_nets,
+        is_distributional=False,
+        num_atoms=3, 
+        v_min=1, 
+        v_max=10,
     )
 
     stats = agent.train(config.num_episodes)
@@ -81,47 +84,7 @@ def main():
         plt.close(fig)
 
     plot_and_log(stats=stats, smoothing_window=20)
+    animate(env, agent, agent.is_noisy_nets, agent.is_distributional, agent.is_double_dqn)
 
-
-# def main():
-
-#     with open("./sweep_config.yaml") as file:
-#         config = yaml.load(file, Loader=yaml.FullLoader)
-#     # 1. Initialize W&B run
-#     print(config)
-#     wandb.init(project="my-minatar-project", config=config)
-
-#     # 2. Set seeds
-#     set_seed(42)
-
-#     # 3. Create environment
-#     env = gym.make('MinAtar/Breakout-v1', render_mode="rgb_array")
-
-#     # 4. Create agent
-#     agent = DQNAgent(
-#         env=env,
-#         gamma=0.99,
-#         lr=wandb.config.lr,                  # from sweep
-#         batch_size=wandb.config.batch_size,  # from sweep
-#         eps_start=0.5,
-#         eps_end=wandb.config.eps_end,        # from sweep
-#         schedule_duration=15_000,
-#         update_freq=100,
-#         maxlen=100_000,
-#         # is_double_dqn=wandb.config.is_double_dqn,  # toggle Double vs. Vanilla
-#         device="cpu"
-#     )
-
-#     # 5. Train
-#     num_episodes = wandb.config.episode
-#     stats = agent.train(num_episodes)
-
-#     # 6. Compute some metric to report back to W&B
-#     avg_reward = np.mean(stats.episode_rewards[-50:])  # last 50 episodes
-#     wandb.log({"avg_reward": avg_reward})
-
-#     print(f"Finished run:, "
-#           f"LR={wandb.config.lr}, Batch={wandb.config.batch_size}, eps_end={wandb.config.eps_end}, "
-#           f"AvgReward={avg_reward:.2f}")
 if __name__ == "__main__":
-    main()
+    main(is_noisy_nets=True)
