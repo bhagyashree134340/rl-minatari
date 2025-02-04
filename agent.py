@@ -27,6 +27,7 @@ class DQNAgent:
                  update_freq=100,
                  is_double_dqn=False,
                  is_noisy_nets=False,
+                 std_init = 0.4,
                  is_distributional=False,
                  num_atoms=51, 
                  v_min=-10, 
@@ -46,6 +47,7 @@ class DQNAgent:
         self.device = device
         self.is_double_dqn = is_double_dqn
         self.is_noisy_nets = is_noisy_nets
+        self.std_init = std_init
         self.is_distributional = is_distributional
         self.num_atoms = num_atoms
         self.v_min = v_min
@@ -55,8 +57,8 @@ class DQNAgent:
         self.buffer = ReplayBuffer(maxlen)
 
         # Create Q-networks
-        self.q = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets, is_distributional, num_atoms, v_min, v_max).to(self.device)
-        self.q_target = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets, is_distributional, num_atoms, v_min, v_max).to(self.device)
+        self.q = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets, std_init, is_distributional, num_atoms, v_min, v_max).to(self.device)
+        self.q_target = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets, std_init, is_distributional, num_atoms, v_min, v_max).to(self.device)
 
         self.q_target.load_state_dict(self.q.state_dict())
 
@@ -100,8 +102,6 @@ class DQNAgent:
                             action, pmf = self.q.get_action(obs.unsqueeze(0))
                             action = action.item()
                     else:
-                        epsilon = linear_epsilon_decay(
-                        self.eps_start, self.eps_end, current_timestep, self.schedule_duration)
                         action = self.policy(obs.unsqueeze(0), epsilon=epsilon)
 
                 # print(action)

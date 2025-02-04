@@ -25,7 +25,15 @@ parameters:
   num_episodes:
     value: 1000
   is_double_dqn:
-    value: true
+    values: [True, False]
+  is_noisy_nets:
+    values: [True, False]
+  is_distributional:
+    values: False
+  std_init:
+    values: [0.1, 0.2, 0.3, 0.4, 0.5]
+  num_atoms:
+    values: [5, 21, 51]
 
 early_terminate:
   type: hyperband # Aggressively terminate poorly performing runs

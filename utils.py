@@ -101,7 +101,7 @@ def set_seed(seed: int = 42):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-def save_rgb_animation(rgb_arrays, filename, duration=100):
+def save_rgb_animation(rgb_arrays, filename, duration=50):
     """Save an animated GIF from a list of RGB arrays."""
     frames = []
     for rgb_array in rgb_arrays:

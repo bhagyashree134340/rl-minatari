@@ -8,7 +8,7 @@ set_seed(42)
 
 
 class DQN(nn.Module):
-    def __init__(self, obs_shape, num_actions, is_noisy_nets=False, is_distributional=False, num_atoms=51, v_min=-10, v_max=10):
+    def __init__(self, obs_shape, num_actions, is_noisy_nets=False, std_init = 0.4, is_distributional=False, num_atoms=51, v_min=-10, v_max=10):
         """
         Initialize the DQN network.
 
@@ -23,6 +23,7 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
 
         self.is_noisy_nets = is_noisy_nets
+        self.std_init = std_init
         self.is_distributional = is_distributional
         self.num_actions = num_actions
         self.num_atoms = num_atoms if is_distributional else 1  # Default to 1 if not distributional
@@ -36,8 +37,8 @@ class DQN(nn.Module):
 
         # Fully connected layers
         if self.is_noisy_nets:
-            self.fc1 = NoisyLinear(32 * 4 * 4, 128)
-            self.fc2 = NoisyLinear(128, num_actions * self.num_atoms)
+            self.fc1 = NoisyLinear(32 * 4 * 4, 128, std_init=std_init)
+            self.fc2 = NoisyLinear(128, num_actions * self.num_atoms, std_init=std_init)
         else:
             self.fc1 = nn.Linear(32 * 4 * 4, 128)
             self.fc2 = nn.Linear(128, num_actions * self.num_atoms)

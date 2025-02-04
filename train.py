@@ -9,10 +9,10 @@ from utils import set_seed
 set_seed(42)
 
 
-def main(is_noisy_nets=False):
+def main():
     wandb.init(
         project="minatar-dqn",
-        name="DQN-Breakout-Noisy" if is_noisy_nets else "DQN-Breakout",
+        name="DQN-Breakout",
         config={
             "learning_rate": 0.001,
             "batch_size": 8,
@@ -23,7 +23,8 @@ def main(is_noisy_nets=False):
             "schedule_duration": 15_000,
             "num_episodes": 1000,
             "discount_factor": 0.99,
-            "is_noisy_nets": is_noisy_nets, 
+            "is_noisy_nets": True, 
+            "std_init":0.5
         }
     )
     config = wandb.config
@@ -39,11 +40,12 @@ def main(is_noisy_nets=False):
         schedule_duration=config.schedule_duration,
         update_freq=config.update_freq,
         maxlen=config.replay_buffer_size,
-        is_double_dqn=False,  # double DQN is set to TRUE
+        is_double_dqn=config.is_double_dqn,  # double DQN is set to TRUE
         is_noisy_nets=config.is_noisy_nets,
-        is_distributional=False,
-        num_atoms=3, 
-        v_min=1, 
+        std_init=config.std_init,
+        is_distributional=config.is_distributional,
+        num_atoms=config.num_atoms, 
+        v_min=-10, 
         v_max=10,
     )
 
@@ -87,4 +89,4 @@ def main(is_noisy_nets=False):
     animate(env, agent, agent.is_noisy_nets, agent.is_distributional, agent.is_double_dqn)
 
 if __name__ == "__main__":
-    main(is_noisy_nets=True)
+    main()
