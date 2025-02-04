@@ -28,8 +28,8 @@ parameters:
     values: [ false ]  # Toggle Double Q-Learning
   is_noisy_nets:
     values: [ false ]  # Toggle Noisy Nets
-  is_dual_dqn:
-    values: [ true ]  # Toggle Dual Networks
+  is_dueling_dqn:
+    values: [ true ]  # Toggle Dueling Networks
   is_multi_step:
     values: [ false ]   # Toggle Multi-Step Learning
   n_step:
