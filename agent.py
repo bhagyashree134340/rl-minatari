@@ -2,17 +2,20 @@
 import torch
 import numpy as np
 import itertools
-from dqn import DQN
-from replay_buffer import ReplayBuffer
-from utils import (EpisodeStats,
-                   linear_epsilon_decay,
-                   make_epsilon_greedy_policy,
-                   update_dqn)
-
 import torch.optim as optim
 import wandb
-from utils import set_seed
-set_seed(42)
+
+from dqn import DQN
+# Import the new Prioritized Buffer
+from replay_buffer import PrioritizedReplayBuffer
+# or from replay_buffer import ReplayBuffer if not using priority
+
+from utils import (
+    EpisodeStats,
+    linear_epsilon_decay,
+    make_epsilon_greedy_policy,
+    update_dqn
+)
 
 
 class DQNAgent:
@@ -39,7 +42,7 @@ class DQNAgent:
                  beta_frames=200_000,
                  device="cpu"):
         """
-        Initialize the DQN agent.
+        DQN Agent that can use Double DQN and Prioritized Replay.
         """
         self.env = env
         self.gamma = gamma
@@ -57,8 +60,23 @@ class DQNAgent:
         self.v_min = v_min
         self.v_max = v_max
 
-        # Initialize Replay Buffer
-        self.buffer = ReplayBuffer(maxlen)
+        # For Prioritized Replay
+        self.use_prioritized_replay = use_prioritized_replay
+        self.alpha = alpha
+        self.beta_start = beta_start
+        self.beta_frames = beta_frames
+        self.frame = 1  # counts total training steps to anneal beta
+
+        # Initialize Replay Buffer (Regular or Prioritized)
+        if self.use_prioritized_replay:
+            self.buffer = PrioritizedReplayBuffer(
+                max_size=maxlen,
+                alpha=self.alpha
+            )
+        else:
+            # If not using prioritized replay, fall back to standard replay
+            from replay_buffer import ReplayBuffer
+            self.buffer = ReplayBuffer(max_size=maxlen)
 
         # Create Q-networks
         self.q = DQN(env.observation_space.shape, env.action_space.n, is_noisy_nets, std_init, is_distributional, num_atoms, v_min, v_max).to(self.device)
@@ -73,10 +91,13 @@ class DQNAgent:
         if not self.is_noisy_nets:
             self.policy = make_epsilon_greedy_policy(self.q, env.action_space.n)
 
+    def _beta_by_frame(self, frame):
+        """
+        Linearly anneal beta from beta_start -> 1 over beta_frames steps.
+        """
+        return min(1.0, self.beta_start + frame * (1.0 - self.beta_start) / self.beta_frames)
+
     def train(self, num_episodes: int = 1000):
-        """
-        Train the DQN agent.
-        """
         stats = EpisodeStats(
             episode_lengths=np.zeros(num_episodes),
             episode_rewards=np.zeros(num_episodes),
@@ -114,54 +135,105 @@ class DQNAgent:
                 stats.episode_rewards[i_episode] += reward
                 stats.episode_lengths[i_episode] += 1
 
-                next_obs = torch.as_tensor(
+                next_obs_t = torch.as_tensor(
                     next_obs, dtype=torch.float32, device=self.device)
+                action_t = torch.as_tensor(action, device=self.device)
+                reward_t = torch.as_tensor(
+                    reward, dtype=torch.float32, device=self.device)
+                done_t = torch.as_tensor(terminated, device=self.device)
 
-                # Store in replay buffer
-                self.buffer.store(obs,
-                                  torch.as_tensor(action, device=self.device),
-                                  torch.as_tensor(
-                                      reward, dtype=torch.float32, device=self.device),
-                                  next_obs,
-                                  torch.as_tensor(terminated, device=self.device))
+                # Store transition in replay buffer
+                if self.use_prioritized_replay:
+                    self.buffer.store(
+                        (obs, action_t, reward_t, next_obs_t, done_t))
+                else:
+                    self.buffer.store(obs, action_t, reward_t,
+                                      next_obs_t, done_t)
+
+                obs = next_obs_t
+                current_timestep += 1
+                self.frame += 1  # for beta annealing
 
                 # Sample a batch if buffer is big enough
                 if len(self.buffer) >= self.batch_size:
-                    obs_batch, act_batch, rew_batch, next_obs_batch, tm_batch = self.buffer.sample(
-                        self.batch_size)
-                    # move to device if needed
-                    obs_batch = obs_batch.to(self.device)
-                    act_batch = act_batch.to(self.device)
-                    rew_batch = rew_batch.to(self.device)
-                    next_obs_batch = next_obs_batch.to(self.device)
-                    tm_batch = tm_batch.to(self.device)
+                    if self.use_prioritized_replay:
+                        # Anneal beta
+                        beta = self._beta_by_frame(self.frame)
 
-                    # Update DQN
-                    loss = update_dqn(
-                        self.q,
-                        self.q_target,
-                        self.optimizer,
-                        self.gamma,
-                        obs_batch,
-                        act_batch,
-                        rew_batch,
-                        next_obs_batch,
-                        tm_batch,
-                        self.is_double_dqn,
-                        self.is_distributional, 
-                        self.num_atoms, 
-                        self.v_min, 
-                        self.v_max
-                    )
+                        (obs_b, act_b, rew_b, next_obs_b, done_b, indices, is_weights) = \
+                            self.buffer.sample(self.batch_size, beta=beta)
 
+                        # Move to device
+                        obs_b = obs_b.to(self.device)
+                        act_b = act_b.to(self.device)
+                        rew_b = rew_b.to(self.device)
+                        next_obs_b = next_obs_b.to(self.device)
+                        done_b = done_b.to(self.device)
+                        is_weights = is_weights.to(self.device)
+
+                        # -- compute predicted Q and target Q for TD-error
+                        self.optimizer.zero_grad()
+
+                        # Q(s,a)
+                        q_values = self.q(obs_b)
+                        q_action = q_values.gather(
+                            1, act_b.unsqueeze(1)).squeeze(1)
+
+                        with torch.no_grad():
+                            if self.is_double_dqn:
+                                next_actions = self.q(next_obs_b).argmax(
+                                    dim=1, keepdim=True)
+                                q_target_next = self.q_target(next_obs_b).gather(
+                                    1, next_actions).squeeze(1)
+                            else:
+                                q_target_next = self.q_target(
+                                    next_obs_b).max(dim=1)[0]
+                            td_target = rew_b + self.gamma * \
+                                q_target_next * (1 - done_b.float())
+
+                        # TD error
+                        td_error = td_target - q_action
+
+                        # Weighted MSE loss
+                        loss = (is_weights * td_error**2).mean()
+
+                        loss.backward()
+                        self.optimizer.step()
+
+                        # Update priorities in buffer
+                        new_priorities = td_error.abs().detach()
+                        self.buffer.update_priorities(indices, new_priorities)
+
+                    else:
+                        # Non-prioritized case
+                        obs_b, act_b, rew_b, next_obs_b, done_b = self.buffer.sample(
+                            self.batch_size)
+                        obs_b = obs_b.to(self.device)
+                        act_b = act_b.to(self.device)
+                        rew_b = rew_b.to(self.device)
+                        next_obs_b = next_obs_b.to(self.device)
+                        done_b = done_b.to(self.device)
+
+                        # Standard update
+                        loss = update_dqn(
+                            self.q,
+                            self.q_target,
+                            self.optimizer,
+                            self.gamma,
+                            obs_b,
+                            act_b,
+                            rew_b,
+                            next_obs_b,
+                            done_b,
+                            is_double_dqn=self.is_double_dqn
+                        )
+                        
                 # Update target network
                 if current_timestep % self.update_freq == 0:
                     self.q_target.load_state_dict(self.q.state_dict())
 
-                current_timestep += 1
-
-                # End episode if done or we hit a step limit
-                if terminated or truncated or episode_time >= 500:
+                # End episode if done or truncated or step-limit
+                if terminated or truncated or (episode_time >= 500):
                     break
 
                 obs = next_obs
@@ -191,4 +263,5 @@ class DQNAgent:
                     "episode_reward": stats.episode_rewards[i_episode],
                     "episode_length": stats.episode_lengths[i_episode],
                 })
+                
         return stats

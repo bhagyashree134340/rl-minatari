@@ -1,9 +1,10 @@
 import wandb
 import gymnasium as gym
 import numpy as np
+import torch
+import yaml
 from agent import DQNAgent
 import matplotlib.pyplot as plt
-from utils import animate
 import pandas as pd
 from utils import animate, set_seed
 from utils import set_seed
@@ -31,14 +32,14 @@ def main():
             "is_distributional":False,
             "num_atoms":51,
         }
-            
-        
     )
     config = wandb.config
+    set_seed(42)
 
     env = gym.make('MinAtar/Breakout-v1', render_mode="rgb_array")
+
     agent = DQNAgent(
-        env,
+        env=env,
         gamma=config.discount_factor,
         lr=config.learning_rate,
         batch_size=config.batch_size,
@@ -47,34 +48,34 @@ def main():
         schedule_duration=config.schedule_duration,
         update_freq=config.update_freq,
         maxlen=config.replay_buffer_size,
-        is_double_dqn=config.is_double_dqn,  # double DQN is set to TRUE
+        use_prioritized_replay=config.use_prioritized_replay,
         is_noisy_nets=config.is_noisy_nets,
         std_init=config.std_init,
         is_distributional=config.is_distributional,
         num_atoms=config.num_atoms, 
         v_min=-10, 
         v_max=10,
+        device="cpu"
     )
 
     stats = agent.train(config.num_episodes)
 
-    # Log final results, e.g. average reward of last 50 episodes
+    # Log final results
     avg_reward = np.mean(stats.episode_rewards[-50:])
     wandb.log({"final_average_reward": avg_reward})
     print(f"Final Average Reward (last 50 episodes): {avg_reward}")
 
+    # Quick plotting function
     def plot_and_log(stats, smoothing_window=10):
-        # Create a figure with two subplots
+        import matplotlib.pyplot as plt
         fig, axes = plt.subplots(1, 2, figsize=(10, 5), tight_layout=True)
 
-        # 1) Episode Lengths
         ax = axes[0]
         ax.plot(stats.episode_lengths)
         ax.set_xlabel("Episode")
         ax.set_ylabel("Episode Length")
         ax.set_title("Episode Length over Time")
 
-        # 2) Smoothed Episode Rewards
         ax = axes[1]
         rewards_smoothed = pd.Series(stats.episode_rewards).rolling(
             smoothing_window, min_periods=smoothing_window
@@ -83,13 +84,10 @@ def main():
         ax.set_xlabel("Episode")
         ax.set_ylabel("Episode Reward (Smoothed)")
         ax.set_title(
-            f"Episode Reward over Time\n(Smoothed over window size {smoothing_window})"
+            f"Episode Reward over Time (Smoothed over window size {smoothing_window})"
         )
 
-        # Log this figure to W&B
         wandb.log({"training_plots": wandb.Image(fig)})
-
-        # Close the figure (to avoid memory issues in notebook or repeated logging)
         plt.close(fig)
 
     plot_and_log(stats=stats, smoothing_window=20)
