@@ -7,6 +7,7 @@ from collections import namedtuple
 import torch
 import numpy as np
 from PIL import Image
+import wandb
 
 EpisodeStats = namedtuple("Stats", ["episode_lengths", "episode_rewards"])
 
@@ -142,6 +143,9 @@ def animate(env, agent, is_noisy_nets, is_distributional, is_double_dqn, filenam
         else make_epsilon_greedy_policy(agent.q, num_actions=env.action_space.n),
         env, is_distributional, max_steps
     )    
-    save_rgb_animation(imgs, filename)
+    run_dir = wandb.run.dir  
+    gif_path = f"{run_dir}/{filename}"
+    save_rgb_animation(imgs, gif_path)
+    wandb.log({"animation": wandb.Video(gif_path, format="gif")})
     print(f"Animation saved as {filename}")
 
