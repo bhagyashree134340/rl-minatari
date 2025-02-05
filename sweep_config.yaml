@@ -1,15 +1,16 @@
 program: train.py
 name: sweep1
 method: random  # Options: "bayes", "grid", etc.
+
 metric:
   name: avg_reward  # Metric to optimize
   goal: maximize
 
 parameters:
   learning_rate:
-    values: [0.0001, 0.001, 0.005, 0.01]
+    values: [0.0001, 0.001, 0.01]
   batch_size:
-    values: [8, 16, 32, 64]
+    values: [8, 16, 32]
   eps_end:
     values: [0.01, 0.05, 0.1]
   discount_factor:
@@ -25,18 +26,22 @@ parameters:
   num_episodes:
     value: 1000
   is_double_dqn:
-    values: [ false ]  # Toggle Double Q-Learning
-  is_noisy_nets:
-    values: [ false ]  # Toggle Noisy Nets
+    values: [False]  # Double DQN toggle
   is_dueling_dqn:
-    values: [ true ]  # Toggle Dueling Networks
-  is_multi_step:
-    values: [ false ]   # Toggle Multi-Step Learning
-  n_step:
-    values: [1, 3, 5]  # Number of steps for Multi-Step Learning
+    values: [True]  # Dueling DQN toggle
+  use_prioritized_replay:
+    values: [False]  # Prioritized Replay toggle
+  is_noisy_nets:
+    values: [False]  # Noisy Networks toggle
+  std_init:
+    values: [0.1, 0.2, 0.3, 0.4, 0.5]  # Initial std for Noisy Nets
+  is_distributional:
+    values: [False]  # Distributional RL toggle
+  num_atoms:
+    values: [5, 21, 51]  # Number of atoms for Distributional RL
 
 early_terminate:
   type: hyperband  # Aggressively terminate poorly performing runs
-  min_iter: 5  # Minimum episodes before termination
-  eta: 2  # Fraction of runs to discard at each stage
-  s: 2  # Number of brackets for Hyperband
+  min_iter: 10  # Allow at least 10 episodes before termination
+  eta: 3  # Increase aggressiveness of termination
+  s: 3  # Increase the number of brackets for better performance filtering
