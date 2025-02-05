@@ -79,7 +79,7 @@ class PrioritizedReplayBuffer:
         obs_batch, act_batch, rew_batch, next_obs_batch, done_batch = [], [], [], [], []
         for i in indices:
             o, a, r, no, d = self.buffer[i]
-            obs_batch.append(o.unsqueeze(0))   # keep them as Tensors
+            obs_batch.append(torch.as_tensor(o, dtype=torch.float32).unsqueeze(0))   # keep them as Tensors
             act_batch.append(a.unsqueeze(0))
             rew_batch.append(r.unsqueeze(0))
             next_obs_batch.append(no.unsqueeze(0))

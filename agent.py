@@ -114,7 +114,7 @@ class DQNAgent:
             for episode_time in itertools.count():
                 #if noisy nets then no epsilon-greedy
                 if self.is_noisy_nets:
-                    action = self.q(obs.unsqueeze(0)).argmax(dim=1).item()
+                    action = self.q(torch.as_tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)).argmax(dim=1).item()
                 else:
                     epsilon = linear_epsilon_decay(
                         self.eps_start, self.eps_end, current_timestep, self.schedule_duration)
