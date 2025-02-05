@@ -225,7 +225,11 @@ class DQNAgent:
                             rew_b,
                             next_obs_b,
                             done_b,
-                            is_double_dqn=self.is_double_dqn
+                            is_double_dqn=self.is_double_dqn,
+                            is_distributional = self.is_distributional,
+                            num_atoms=self.num_atoms, 
+                            v_min=self.v_min, 
+                            v_max=self.v_max
                         )
                         
                 # Update target network
@@ -236,7 +240,7 @@ class DQNAgent:
                 if terminated or truncated or (episode_time >= 500):
                     break
 
-                obs = next_obs
+                # obs = next_obs
 
             # Print progress
             if self.is_noisy_nets:
