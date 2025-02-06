@@ -146,7 +146,15 @@ class DQNAgent:
                     action = self.q(obs.unsqueeze(0)).argmax(dim=1).item() if not self.is_dueling_dqn else self.dueling_agent.q(obs.unsqueeze(0)).argmax(dim=1).item()
                 else:
                     epsilon = linear_epsilon_decay(self.eps_start, self.eps_end, current_timestep, self.schedule_duration)
-                    action = self.policy(obs.unsqueeze(0), epsilon=epsilon)
+                    if self.is_distributional:
+                        if np.random.uniform() < epsilon:
+                            action = np.random.randint(0, self.env.action_space.n)
+                        else:
+                            #FIXME: pmf 
+                            action, pmf = self.q.get_action(obs.unsqueeze(0))
+                            action = action.item()
+                    else:
+                        action = self.policy(obs.unsqueeze(0), epsilon=epsilon)
 
                 next_obs, reward, terminated, truncated, _ = self.env.step(action)
                 stats.episode_rewards[i_episode] += reward

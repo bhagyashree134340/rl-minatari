@@ -61,7 +61,7 @@ def main():
             "use_prioritized_replay": False,  
             "is_noisy_nets": False, 
             "std_init": 0.5,
-            "is_distributional": False,
+            "is_distributional": True,
             "num_atoms": 51,
             "is_dueling_dqn": False,  # Dueling DQN support
             "use_multi_step": False,  # Multi-Step Learning support
