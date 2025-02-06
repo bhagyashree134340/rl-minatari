@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from noisy_linear import NoisyLinear  # ✅ Import Noisy Linear for Noisy Nets
+from noisy_linear import NoisyLinear 
 
 
 class DuelingNetwork(nn.Module):
@@ -27,14 +27,14 @@ class DuelingNetwork(nn.Module):
         self.v_min = v_min
         self.v_max = v_max
 
-        # ✅ Shared feature extractor (Convolutional Encoder)
+        # Shared feature extractor (Convolutional Encoder)
         self.conv1 = nn.Conv2d(obs_shape[-1], 16, kernel_size=5, stride=1)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1)
 
-        # ✅ Fully connected layer for shared feature representation
+        # Fully connected layer for shared feature representation
         self.fc1 = nn.Linear(32 * 4 * 4, 128)
 
-        # ✅ Define Advantage and Value Streams
+        # Define Advantage and Value Streams
         if self.is_noisy_nets:
             self.advantage = NoisyLinear(128, num_actions * self.num_atoms, std_init=std_init)
             self.value = NoisyLinear(128, self.num_atoms, std_init=std_init)  # Value Stream only needs 1 output per atom
@@ -50,7 +50,7 @@ class DuelingNetwork(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the Dueling Network."""
-        # ✅ Convert from (B, H, W, C) → (B, C, H, W)
+        # Convert from (B, H, W, C) → (B, C, H, W)
         x = x.permute(0, 3, 1, 2)
         x = self.relu(self.conv1(x))
         x = self.relu(self.conv2(x))
@@ -58,11 +58,11 @@ class DuelingNetwork(nn.Module):
         x = torch.flatten(x, 1)
         x = self.relu(self.fc1(x))
 
-        # ✅ Compute Advantage & Value separately
+        #  Compute Advantage & Value separately
         advantage = self.advantage(x)
         value = self.value(x)
 
-        # ✅ Aggregate Q-values: Q(s,a) = V(s) + A(s,a) - mean(A(s,a))
+        # Aggregate Q-values: Q(s,a) = V(s) + A(s,a) - mean(A(s,a))
         q_values = value + (advantage - advantage.mean(dim=1, keepdim=True))
 
         return q_values
@@ -81,43 +81,43 @@ class DuelingDQNAgent:
         """
         self.device = device
 
-        # ✅ Use Dueling Q-Networks
+        # Use Dueling Q-Networks
         self.q = DuelingNetwork(env.observation_space.shape, env.action_space.n, is_noisy_nets, std_init, is_distributional, num_atoms, v_min, v_max).to(self.device)
         self.q_target = DuelingNetwork(env.observation_space.shape, env.action_space.n, is_noisy_nets, std_init, is_distributional, num_atoms, v_min, v_max).to(self.device)
 
         self.optimizer = optim.Adam(self.q.parameters(), lr=lr)
 
-        # ✅ Copy initial weights to target network
+        # Copy initial weights to target network
         self.q_target.load_state_dict(self.q.state_dict())
 
     def update_target_network(self):
-        """ ✅ Soft update target network """
+        """ Soft update target network """
         self.q_target.load_state_dict(self.q.state_dict())
 
 
 def update_dueling_dqn(agent, gamma, obs, act, rew, next_obs, tm, is_double_dqn=False):
     """
-    ✅ Update function for Dueling Q-Network.
+     Update function for Dueling Q-Network.
     """
     agent.optimizer.zero_grad()
 
     with torch.no_grad():
         if is_double_dqn:
-            # ✅ Double DQN: use the **online network** to get actions
+            #  Double DQN: use the **online network** to get actions
             next_actions = agent.q(next_obs).argmax(dim=1, keepdim=True)
             target_q_values = agent.q_target(next_obs).gather(1, next_actions).squeeze(1)
         else:
-            # ✅ Regular Dueling Q-Network
+            #  Regular Dueling Q-Network
             target_q_values = agent.q_target(next_obs).max(dim=1)[0]
 
-        # ✅ Compute TD target
+        # Compute TD target
         td_target = rew + gamma * target_q_values * (1 - tm.float())
 
-    # ✅ Compute current Q-values
+    #  Compute current Q-values
     q_values = agent.q(obs)
     q_action = q_values.gather(1, act.unsqueeze(1)).squeeze(1)
 
-    # ✅ Compute loss & optimize
+    #  Compute loss & optimize
     loss = F.mse_loss(q_action, td_target)
     loss.backward()
     agent.optimizer.step()

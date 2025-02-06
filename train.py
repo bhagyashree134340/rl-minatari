@@ -1,3 +1,5 @@
+
+
 import wandb
 import gymnasium as gym
 import numpy as np
@@ -9,11 +11,11 @@ from agent import DQNAgent
 from utils import animate, set_seed
 from minatar import Environment
 
-# ✅ Set seed for reproducibility
+# Set seed for reproducibility
 set_seed(42)
 
 
-# ✅ Custom MinAtar Wrapper
+# Custom MinAtar Wrapper
 class MinAtarGymWrapper(gym.Env):
     """Custom Gym Wrapper for MinAtar environments."""
 
@@ -21,7 +23,7 @@ class MinAtarGymWrapper(gym.Env):
         super().__init__()
         self.env = Environment(game)
         
-        # ✅ Properly set action & observation spaces
+        #  Properly set action & observation spaces
         self.action_space = gym.spaces.Discrete(self.env.num_actions())  
         obs_shape = self.env.state().shape  
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=obs_shape, dtype=np.float32)
@@ -61,13 +63,15 @@ def main():
             "std_init": 0.5,
             "is_distributional": False,
             "num_atoms": 51,
-            "is_dueling_dqn": True,  # ✅ New flag to toggle Dueling Networks
+            "is_dueling_dqn": False,  # Dueling DQN support
+            "use_multi_step": False,  # Multi-Step Learning support
+            "n_steps": 3,  # Number of steps for Multi-Step Learning
         }
     )
     config = wandb.config
     set_seed(42)
 
-    # ✅ Use MinAtar environment wrapper
+    #  Use MinAtar environment wrapper
     env = MinAtarGymWrapper("breakout")
     print(f"✅ Successfully created MinAtar Environment: {env}")
     obs, _ = env.reset()
@@ -90,29 +94,31 @@ def main():
         num_atoms=config.num_atoms, 
         v_min=-10, 
         v_max=10,
-        is_dueling_dqn=config.is_dueling_dqn,  # ✅ Use Dueling DQN if enabled
+        is_dueling_dqn=config.is_dueling_dqn,  #  Use Dueling DQN if enabled
+        use_multi_step=config.use_multi_step,  #  Enable Multi-Step Learning
+        n_steps=config.n_steps,  #  Number of Multi-Step Lookahead Steps
         device="cpu"
     )
 
     stats = agent.train(config.num_episodes)
 
-    # ✅ Log final results
+    #  Log final results
     avg_reward = np.mean(stats.episode_rewards[-50:])
     wandb.log({"final_average_reward": avg_reward})
-    print(f"✅ Final Average Reward (last 50 episodes): {avg_reward}")
+    print(f" Final Average Reward (last 50 episodes): {avg_reward}")
 
-    # ✅ Function to plot results
+    #  Function to plot results
     def plot_and_log(stats, smoothing_window=10):
         fig, axes = plt.subplots(1, 2, figsize=(10, 5), tight_layout=True)
 
-        # ✅ Episode Lengths
+        #  Episode Lengths
         ax = axes[0]
         ax.plot(stats.episode_lengths)
         ax.set_xlabel("Episode")
         ax.set_ylabel("Episode Length")
         ax.set_title("Episode Length over Time")
 
-        # ✅ Smoothed Episode Rewards
+        #  Smoothed Episode Rewards
         ax = axes[1]
         rewards_smoothed = pd.Series(stats.episode_rewards).rolling(
             smoothing_window, min_periods=smoothing_window
@@ -124,16 +130,16 @@ def main():
             f"Episode Reward over Time (Smoothed over window size {smoothing_window})"
         )
 
-        # ✅ Log to W&B
+        # Log to W&B
         wandb.log({"training_plots": wandb.Image(fig)})
         plt.close(fig)
 
     plot_and_log(stats=stats, smoothing_window=20)
 
-    # ✅ Generate Training Animation
-    # animate(env, agent, agent.is_noisy_nets, agent.is_distributional, agent.is_double_dqn)
+    # Generate Training Animation
     animate(env, agent, agent.is_noisy_nets, agent.is_distributional, agent.is_double_dqn, agent.is_dueling_dqn)
 
 
 if __name__ == "__main__":
     main()
+

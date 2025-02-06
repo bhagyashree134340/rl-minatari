@@ -1,3 +1,5 @@
+
+
 program: train.py
 name: sweep1
 method: random  # Options: "bayes", "grid", etc.
@@ -25,23 +27,39 @@ parameters:
     value: 15000
   num_episodes:
     value: 1000
+
+  #  Enable exploration of Double DQN
   is_double_dqn:
-    values: [False]  # Double DQN toggle
+    values: [True]  # True/False
+
+  #  Dueling Networks tuning
   is_dueling_dqn:
-    values: [True]  # Dueling DQN toggle
+    values: [False]  # True/False
+
+  #  Prioritized Replay Buffer tuning
   use_prioritized_replay:
-    values: [False]  # Prioritized Replay toggle
+    values: [False]  # True/False
+
+  #  Noisy Networks tuning
   is_noisy_nets:
-    values: [False]  # Noisy Networks toggle
+    values: [False]  # True/False
   std_init:
     values: [0.1, 0.2, 0.3, 0.4, 0.5]  # Initial std for Noisy Nets
+
+  #  Distributional RL tuning
   is_distributional:
-    values: [False]  # Distributional RL toggle
+    values: [False]  # True/False
   num_atoms:
     values: [5, 21, 51]  # Number of atoms for Distributional RL
 
+  #  Multi-Step Learning tuning
+  use_multi_step:
+    values: [True]  # True/False
+  n_steps:
+    values: [1, 3, 5, 15]  # Different step sizes for multi-step learning
+
 early_terminate:
   type: hyperband  # Aggressively terminate poorly performing runs
-  min_iter: 10  # Allow at least 10 episodes before termination
-  eta: 3  # Increase aggressiveness of termination
-  s: 3  # Increase the number of brackets for better performance filtering
+  min_iter: 20  # Allow at least 20 episodes before termination (was 10)
+  eta: 2  # Reduce aggressiveness of termination (was 3)
+  s: 3  # Keep brackets to ensure filtering of bad runs
